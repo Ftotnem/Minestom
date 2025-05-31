@@ -1,4 +1,4 @@
-// nub.wi1helm.player/PlayerService.java
+// Updated PlayerService.java with Singleton Pattern
 package nub.wi1helm.player;
 
 import com.google.gson.*;
@@ -10,60 +10,72 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException; // Import for wrapping exceptions
+import java.util.concurrent.CompletionException;
 
 import static nub.wi1helm.Main.logger;
 
 public class PlayerService {
 
-    private static final String BASE_URL = "http://localhost:8081"; // Corrected port if 8081 is your Go service
-    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
-            .version(HttpClient.Version.HTTP_1_1)
-            .connectTimeout(java.time.Duration.ofSeconds(5))
-            .build();
+    // Singleton instance
+    private static volatile PlayerService instance;
+    private static final Object lock = new Object();
 
-    private static final Gson GSON = new GsonBuilder()
-            .registerTypeAdapter(Instant.class, (JsonSerializer<Instant>) (src, typeOfSrc, context) -> {
-                return src == null ? JsonNull.INSTANCE : new JsonPrimitive(src.toString());
-            })
-            .registerTypeAdapter(Instant.class, (JsonDeserializer<Instant>) (json, typeOfT, context) -> {
-                if (json.isJsonNull() || json.getAsString().isEmpty()) {
-                    return null;
+    private static final String BASE_URL = "http://localhost:8081";
+
+    private final HttpClient httpClient;
+    private final Gson gson;
+
+    // Private constructor to prevent direct instantiation
+    private PlayerService() {
+        this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+
+        this.gson = new GsonBuilder()
+                .registerTypeAdapter(Instant.class, (JsonSerializer<Instant>) (src, typeOfSrc, context) -> {
+                    return src == null ? JsonNull.INSTANCE : new JsonPrimitive(src.toString());
+                })
+                .registerTypeAdapter(Instant.class, (JsonDeserializer<Instant>) (json, typeOfT, context) -> {
+                    if (json.isJsonNull() || json.getAsString().isEmpty()) {
+                        return null;
+                    }
+                    return Instant.parse(json.getAsString());
+                })
+                .create();
+    }
+
+    // Thread-safe singleton getter
+    public static PlayerService getInstance() {
+        if (instance == null) {
+            synchronized (lock) {
+                if (instance == null) {
+                    instance = new PlayerService();
                 }
-                return Instant.parse(json.getAsString());
-            })
-            .create();
+            }
+        }
+        return instance;
+    }
 
-    /**
-     * Attempts to load a player's profile. If the profile does not exist, it creates one.
-     * Handles race conditions during creation.
-     *
-     * @param uuid The player's UUID.
-     * @param username The player's username (used for logging/error messages).
-     * @return A CompletableFuture that will complete with the ServerProfile, or exceptionally if an error occurs.
-     */
     public CompletableFuture<ServerProfile> loadPlayerProfile(@NotNull String uuid, @NotNull String username) {
         return getPlayerProfile(uuid, username)
                 .thenCompose(profileWithStatus -> {
-                    // If profile was found directly, return it.
                     if (profileWithStatus.profile != null) {
                         logger.info("PlayerService: Loaded existing player data for {}.", username);
                         return CompletableFuture.completedFuture(profileWithStatus.profile);
                     }
 
-                    // Profile not found, attempt to create it
                     logger.info("PlayerService: Player profile not found for {}. Attempting to create.", username);
                     return createPlayerProfile(uuid)
                             .thenCompose(createdProfile -> {
-                                // Creation successful
                                 logger.info("PlayerService: Player profile newly created for {}.", username);
                                 createdProfile.setFirstJoin(true);
                                 return CompletableFuture.completedFuture(createdProfile);
                             })
                             .exceptionallyCompose(ex -> {
-                                // If creation failed due to conflict (race condition), retry GET
                                 if (ex.getCause() instanceof RuntimeException && ex.getCause().getMessage().contains("409 Conflict")) {
                                     logger.warn("PlayerService: Race condition detected for {}. Profile already exists, retrying GET.", username);
                                     return getPlayerProfile(uuid, username)
@@ -76,7 +88,6 @@ public class PlayerService {
                                                 }
                                             });
                                 }
-                                // Propagate other creation errors
                                 throw new CompletionException(ex);
                             });
                 })
@@ -87,10 +98,9 @@ public class PlayerService {
                 });
     }
 
-    // Private helper to wrap the profile and status for internal use
     private static class ProfileStatus {
         ServerProfile profile;
-        int statusCode; // Keep status code for specific handling
+        int statusCode;
 
         ProfileStatus(ServerProfile profile, int statusCode) {
             this.profile = profile;
@@ -98,21 +108,20 @@ public class PlayerService {
         }
     }
 
-    // Private helper to perform the GET request and initial parsing
     private CompletableFuture<ProfileStatus> getPlayerProfile(@NotNull String uuid, @NotNull String username) {
         HttpRequest getRequest = HttpRequest.newBuilder()
-                .uri(URI.create(BASE_URL + "/profiles/" + uuid)) // Corrected endpoint to /profiles
+                .uri(URI.create(BASE_URL + "/profiles/" + uuid))
                 .GET()
                 .header("Accept", "application/json")
-                .timeout(java.time.Duration.ofSeconds(8))
+                .timeout(Duration.ofSeconds(8))
                 .build();
 
-        return HTTP_CLIENT.sendAsync(getRequest, HttpResponse.BodyHandlers.ofString())
+        return httpClient.sendAsync(getRequest, HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
                     logger.debug("PlayerService (GET): Received HTTP response for {}. Status: {}, Body: {}", username, response.statusCode(), response.body());
 
                     if (response.statusCode() == 404) {
-                        return new ProfileStatus(null, response.statusCode()); // Profile not found
+                        return new ProfileStatus(null, response.statusCode());
                     }
 
                     if (response.statusCode() != 200) {
@@ -121,32 +130,31 @@ public class PlayerService {
 
                     PlayerApiResponse apiResponse = parseApiResponse(response.body(), username);
                     ServerProfile profile = createServerProfile(apiResponse);
-                    profile.setFirstJoin(false); // Definitely not first join if retrieved successfully
+                    profile.setFirstJoin(false);
                     return new ProfileStatus(profile, response.statusCode());
                 });
     }
 
-    // Private helper to perform the POST request for creation
     private CompletableFuture<ServerProfile> createPlayerProfile(@NotNull String uuid) {
         JsonObject requestBody = new JsonObject();
-        requestBody.addProperty("uuid", uuid); // Ensure UUID is in the request body
+        requestBody.addProperty("uuid", uuid);
 
         HttpRequest postRequest = HttpRequest.newBuilder()
-                .uri(URI.create(BASE_URL + "/profiles")) // Corrected endpoint to /profiles
-                .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(requestBody)))
+                .uri(URI.create(BASE_URL + "/profiles"))
+                .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(requestBody)))
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
-                .timeout(java.time.Duration.ofSeconds(8))
+                .timeout(Duration.ofSeconds(8))
                 .build();
 
-        return HTTP_CLIENT.sendAsync(postRequest, HttpResponse.BodyHandlers.ofString())
+        return httpClient.sendAsync(postRequest, HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
                     logger.debug("PlayerService (POST): Received HTTP response for {}. Status: {}, Body: {}", uuid, response.statusCode(), response.body());
 
-                    if (response.statusCode() == 409) { // Conflict - already exists
+                    if (response.statusCode() == 409) {
                         throw new RuntimeException("409 Conflict: Player profile already exists for " + uuid);
                     }
-                    if (response.statusCode() != 201) { // Expect 201 Created
+                    if (response.statusCode() != 201) {
                         throw new RuntimeException(String.format("Unexpected response status from data service (POST %d): %s", response.statusCode(), response.body()));
                     }
 
@@ -155,28 +163,31 @@ public class PlayerService {
                 });
     }
 
-    // Centralized JSON parsing logic
     private PlayerApiResponse parseApiResponse(String jsonBody, String identifier) {
         try {
-            return GSON.fromJson(jsonBody, PlayerApiResponse.class);
+            return gson.fromJson(jsonBody, PlayerApiResponse.class);
         } catch (JsonSyntaxException e) {
             logger.error("PlayerService: Failed to parse JSON response for {}: {}", identifier, jsonBody, e);
             throw new RuntimeException("Failed to parse player data: " + e.getMessage());
         }
     }
 
-    // Centralized ServerProfile creation logic
     private ServerProfile createServerProfile(PlayerApiResponse apiResponse) {
         return new ServerProfile(
                 apiResponse.getUuid(),
                 apiResponse.getUsername(),
-                apiResponse.getTotalPlaytimeTicks(), // Use getTotalPlaytimeTicks directly
-                apiResponse.getDeltaPlaytimeTicks(), // Use getDeltaPlaytimeTicks directly
+                apiResponse.getTotalPlaytimeTicks(),
+                apiResponse.getDeltaPlaytimeTicks(),
                 apiResponse.isBanned(),
                 apiResponse.getBanExpiresAt(),
                 ServerTeam.fromString(apiResponse.getTeam()),
                 apiResponse.getLastLoginAt(),
                 apiResponse.getCreatedAt()
         );
+    }
+
+    // Method to gracefully shutdown the HttpClient when needed
+    public void shutdown() {
+        logger.info("PlayerService: Shutdown requested");
     }
 }

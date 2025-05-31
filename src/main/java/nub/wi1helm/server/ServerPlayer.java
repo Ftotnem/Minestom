@@ -7,14 +7,11 @@ import net.minestom.server.network.player.GameProfile;
 import net.minestom.server.network.player.PlayerConnection;
 import nub.wi1helm.player.GameService;
 import nub.wi1helm.player.PlayerService;
+import nub.wi1helm.server.ServerProfile;
+import nub.wi1helm.server.ServerTeam;
 import org.jetbrains.annotations.NotNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
-
 
 import static nub.wi1helm.Main.logger;
 
@@ -22,8 +19,9 @@ public class ServerPlayer extends Player {
 
     private ServerProfile serverProfile;
 
-    private final PlayerService playerService = new PlayerService();
-    private final GameService gameService = new GameService();
+    // Use singleton instances instead of creating new ones
+    private static final PlayerService playerService = PlayerService.getInstance();
+    private static final GameService gameService = GameService.getInstance();
 
     private final CompletableFuture<Void> playerDataLoadFuture;
 
@@ -34,8 +32,6 @@ public class ServerPlayer extends Player {
                 .thenCompose(loadedProfile -> {
                     this.serverProfile = loadedProfile;
 
-                    // Initial load of playtime data from GameService (Redis)
-                    // This fetches the *current* state at login.
                     CompletableFuture<Double> totalPlaytimeFuture = gameService.getPlayerTotalPlaytime(getUuid().toString());
                     CompletableFuture<Double> deltaPlaytimeFuture = gameService.getPlayerDeltaPlaytime(getUuid().toString());
 
@@ -53,7 +49,6 @@ public class ServerPlayer extends Player {
 
                                 } catch (Exception e) {
                                     logger.error("Failed to fetch initial playtime data for {} (UUID: {}): {}", getUsername(), getUuid(), e.getMessage(), e);
-                                    // Player can still join, just with initial playtime possibly being 0.0 if fetch failed
                                 }
                             });
                 })
@@ -69,8 +64,7 @@ public class ServerPlayer extends Player {
     public void tick(long time) {
         super.tick(time);
 
-        // Fetch the latest total playtime from the Go service (Redis) on EVERY tick.
-        // This ensures the in-game data in serverProfile is updated with real-time Redis values.
+        // Use singleton instances
         gameService.getPlayerTotalPlaytime(getUuid().toString())
                 .thenAccept(latestPlaytime -> {
                     if (serverProfile != null) {
@@ -79,10 +73,9 @@ public class ServerPlayer extends Player {
                 })
                 .exceptionally(e -> {
                     logger.warn("Failed to fetch latest total playtime for {}: {}", getUuid(), e.getMessage());
-                    return null; // Handle exception gracefully
+                    return null;
                 });
 
-        // Fetch the latest delta playtime from the Go service (Redis) on EVERY tick.
         gameService.getPlayerDeltaPlaytime(getUuid().toString())
                 .thenAccept(latestDeltaPlaytime -> {
                     if (serverProfile != null) {
@@ -91,25 +84,24 @@ public class ServerPlayer extends Player {
                 })
                 .exceptionally(e -> {
                     logger.warn("Failed to fetch latest delta playtime for {}: {}", getUuid(), e.getMessage());
-                    return null; // Handle exception gracefully
+                    return null;
                 });
-
         updateActionBar();
-
     }
 
     public void updateActionBar() {
+        if (serverProfile == null) return;
+
         long seconds = (long) (serverProfile.getPlaytime() / 20);
         String formattedTime = String.format("%08d", seconds);
         String displayTime = formattedTime.replaceAll("(?<=\\d)(?=(\\d{3})+$)", ".");
 
-        // ticksPertick directly equals seconds gained per second
         String rate = String.format("<gray>+%.1fs/s</gray>", (double) getServerProfile().getDeltaPlaytime());
 
         String full = displayTime + " " + rate;
         this.sendActionBar(MiniMessage.miniMessage().deserialize(full));
     }
-    // Getter for the CompletableFuture to check when data is loaded
+
     public CompletableFuture<Void> getPlayerDataLoadFuture() {
         return playerDataLoadFuture;
     }
@@ -122,11 +114,10 @@ public class ServerPlayer extends Player {
         return serverProfile;
     }
 
-    // These getters now correctly reflect the data stored in serverProfile,
-    // which is updated on every tick from Redis.
     public double getPlaytime() {
         return serverProfile != null ? serverProfile.getPlaytime() : 0.0;
     }
+
     public double getDeltaPlaytime() {
         return serverProfile != null ? serverProfile.getDeltaPlaytime() : 1.0;
     }
@@ -136,6 +127,6 @@ public class ServerPlayer extends Player {
     }
 
     public ServerTeam getServerTeam() {
-        return serverProfile != null ? serverProfile.getServerTeam() : ServerTeam.UNKNOWN;
+        return serverProfile != null ? serverProfile.getServerTeam() : null;
     }
 }
