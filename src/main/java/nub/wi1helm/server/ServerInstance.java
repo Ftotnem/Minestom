@@ -21,11 +21,10 @@ public class ServerInstance extends net.minestom.server.instance.InstanceContain
     private int CHUNK_RADIUS_X = 4;
     private int CHUNK_RADIUS_Z = 2;
 
-
-
-
     public ServerInstance() {
-        super(UUID.randomUUID(), DimensionType.OVERWORLD, new AnvilLoader("src/main/resources/world"));
+        // CORRECTED LINE: Use the path relative to the /app WORKDIR in the Docker container
+        // The resources are copied to /app/resources, so the world is at /app/resources/world
+        super(UUID.randomUUID(), DimensionType.OVERWORLD, new AnvilLoader("resources/world"));
         this.enableAutoChunkLoad(false);
         // Store the futures so we can use CompletableFuture#allOf
         Set<CompletableFuture<Chunk>> futures = new HashSet<>();
