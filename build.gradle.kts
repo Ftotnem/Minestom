@@ -1,5 +1,6 @@
 plugins {
     id("java")
+    id("com.github.johnrengelman.shadow") version "8.1.1" // Shadow plugin
 }
 
 group = "nub.wi1helm"
@@ -47,6 +48,29 @@ java {
     withJavadocJar()
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
+}
+
+tasks {
+    compileJava {
+        options.encoding = "UTF-8"
+    }
+
+    jar {
+        manifest {
+            attributes(
+                "Main-Class" to "nub.wi1helm.Main" // Your main class
+            )
+        }
+    }
+
+    shadowJar {
+        archiveClassifier.set("") // Removes the '-all' suffix
+        mergeServiceFiles() // Merges service descriptor files for dependencies
+    }
+
+    build {
+        dependsOn(shadowJar)
+    }
 }
 
 tasks.test {
