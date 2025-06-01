@@ -19,7 +19,7 @@ public class GameService {
     private static final Object lock = new Object();
 
     // Base URL for your Go Game Service
-    private static final String GAME_SERVICE_BASE_URL = "http://localhost:8082";
+    private static final String GAME_SERVICE_BASE_URL = "http://game-service:8082";
 
     private final HttpClient httpClient;
     private final Gson gson;
@@ -200,136 +200,11 @@ public class GameService {
                 });
     }
 
-    /**
-     * Checks if a player is currently online.
-     * Corresponds to Go endpoint: `GET /game/player/{uuid}/is-online`
-     *
-     * @param uuid The UUID of the player.
-     * @return A CompletableFuture that completes with true if the player is online, false otherwise, or on error.
-     */
-    public CompletableFuture<Boolean> isPlayerOnline(String uuid) {
-        HttpRequest getRequest = HttpRequest.newBuilder()
-                .uri(URI.create(GAME_SERVICE_BASE_URL + "/game/player/" + uuid + "/is-online")) // Updated URI
-                .GET()
-                .header("Accept", "application/json")
-                .timeout(Duration.ofSeconds(8))
-                .build();
 
-        return httpClient.sendAsync(getRequest, HttpResponse.BodyHandlers.ofString())
-                .thenApply(response -> {
-                    if (response.statusCode() != 200) {
-                        logger.error("GameService: Unexpected response status for player online status (GET {}): {}", response.statusCode(), response.body());
-                        // Treat non-200 as not online or an error occurred
-                        return false;
-                    }
-
-                    try {
-                        PlayerOnlineStatusResponse apiResponse = gson.fromJson(response.body(), PlayerOnlineStatusResponse.class);
-                        // Safely get the online status, handle potential null
-                        return apiResponse != null && apiResponse.isOnline();
-                    } catch (JsonSyntaxException e) {
-                        logger.error("GameService: Failed to parse player online status JSON response for {}: {}", uuid, response.body(), e);
-                        return false; // Treat parsing error as not online
-                    }
-                })
-                .exceptionally(ex -> {
-                    logger.error("GameService: Exception fetching player online status for {}: {}", uuid, ex.getMessage(), ex);
-                    return false; // Return false on exception
-                });
-    }
 
     // Add methods for HandlePlayerOnline, HandlePlayerOffline, HandleRefreshOnline, HandleBanPlayer, HandleUnbanPlayer
     // if your Java client needs to trigger these actions. They would typically be POST requests.
 
-    /**
-     * Marks a player as online in the Game Service.
-     * Corresponds to Go endpoint: `POST /game/player/online`
-     *
-     * @param uuid The UUID of the player.
-     * @return A CompletableFuture that completes when the operation is done.
-     */
-    public CompletableFuture<Void> playerOnline(String uuid) {
-        String requestBody = gson.toJson(new PlayerUUIDRequest(uuid));
-        HttpRequest postRequest = HttpRequest.newBuilder()
-                .uri(URI.create(GAME_SERVICE_BASE_URL + "/game/player/online"))
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(15)) // Match Go's increased timeout
-                .build();
-
-        return httpClient.sendAsync(postRequest, HttpResponse.BodyHandlers.ofString())
-                .thenAccept(response -> {
-                    if (response.statusCode() != 200) {
-                        logger.error("GameService: Failed to mark player {} online (Status: {}): {}", uuid, response.statusCode(), response.body());
-                        throw new RuntimeException(String.format("Failed to mark player online: %d %s", response.statusCode(), response.body()));
-                    }
-                    logger.info("GameService: Player {} successfully marked online.", uuid);
-                })
-                .exceptionally(ex -> {
-                    logger.error("GameService: Exception marking player {} online: {}", uuid, ex.getMessage(), ex);
-                    throw new RuntimeException("Exception marking player online: " + ex.getMessage(), ex);
-                });
-    }
-
-    /**
-     * Marks a player as offline in the Game Service.
-     * Corresponds to Go endpoint: `POST /game/player/offline`
-     *
-     * @param uuid The UUID of the player.
-     * @return A CompletableFuture that completes when the operation is done.
-     */
-    public CompletableFuture<Void> playerOffline(String uuid) {
-        String requestBody = gson.toJson(new PlayerUUIDRequest(uuid));
-        HttpRequest postRequest = HttpRequest.newBuilder()
-                .uri(URI.create(GAME_SERVICE_BASE_URL + "/game/player/offline"))
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(15)) // Match Go's increased timeout
-                .build();
-
-        return httpClient.sendAsync(postRequest, HttpResponse.BodyHandlers.ofString())
-                .thenAccept(response -> {
-                    if (response.statusCode() != 200) {
-                        logger.error("GameService: Failed to mark player {} offline (Status: {}): {}", uuid, response.statusCode(), response.body());
-                        throw new RuntimeException(String.format("Failed to mark player offline: %d %s", response.statusCode(), response.body()));
-                    }
-                    logger.info("GameService: Player {} successfully marked offline and data persisted.", uuid);
-                })
-                .exceptionally(ex -> {
-                    logger.error("GameService: Exception marking player {} offline: {}", uuid, ex.getMessage(), ex);
-                    throw new RuntimeException("Exception marking player offline: " + ex.getMessage(), ex);
-                });
-    }
-
-    /**
-     * Refreshes a player's online status (heartbeat) in the Game Service.
-     * Corresponds to Go endpoint: `POST /game/player/refresh-online`
-     *
-     * @param uuid The UUID of the player.
-     * @return A CompletableFuture that completes when the operation is done.
-     */
-    public CompletableFuture<Void> refreshPlayerOnline(String uuid) {
-        String requestBody = gson.toJson(new PlayerUUIDRequest(uuid));
-        HttpRequest postRequest = HttpRequest.newBuilder()
-                .uri(URI.create(GAME_SERVICE_BASE_URL + "/game/player/refresh-online"))
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(5)) // Match Go's timeout
-                .build();
-
-        return httpClient.sendAsync(postRequest, HttpResponse.BodyHandlers.ofString())
-                .thenAccept(response -> {
-                    if (response.statusCode() != 200) {
-                        logger.error("GameService: Failed to refresh player {} online status (Status: {}): {}", uuid, response.statusCode(), response.body());
-                        throw new RuntimeException(String.format("Failed to refresh player online status: %d %s", response.statusCode(), response.body()));
-                    }
-                    logger.debug("GameService: Player {} online status refreshed.", uuid); // Using debug as this is a frequent call
-                })
-                .exceptionally(ex -> {
-                    logger.error("GameService: Exception refreshing player {} online status: {}", uuid, ex.getMessage(), ex);
-                    throw new RuntimeException("Exception refreshing player online status: " + ex.getMessage(), ex);
-                });
-    }
 
     // DTO for PlayerUUIDRequest
     private static class PlayerUUIDRequest {
