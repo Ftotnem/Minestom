@@ -8,7 +8,7 @@ WORKDIR /app
 COPY ./docker/Minestom-0.1.jar /app/server.jar
 
 # Copy the resources folder into the container (relative to the root directory)
-COPY src/main/resources /app/resources
+COPY ./src/main/resources /app/resources
 
 # Expose the port
 EXPOSE 25565

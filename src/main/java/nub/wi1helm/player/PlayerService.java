@@ -1,4 +1,4 @@
-// Updated PlayerService.java with Simple Error Logging
+// Updated PlayerService.java with Enhanced Error Logging
 package nub.wi1helm.player;
 
 import com.google.gson.*;
@@ -6,6 +6,7 @@ import nub.wi1helm.server.ServerProfile;
 import nub.wi1helm.server.ServerTeam;
 import org.jetbrains.annotations.NotNull;
 
+import java.net.ConnectException; // Import ConnectException
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -80,7 +81,11 @@ public class PlayerService {
                                 }
                             })
                             .exceptionallyCompose(ex -> {
-                                if (ex.getCause() != null && ex.getCause().getMessage() != null && ex.getCause().getMessage().contains("409 Conflict")) {
+                                Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                                String errorMessage = cause.getClass().getName() + ": " + (cause.getMessage() != null ? cause.getMessage() : "No message");
+                                if (cause instanceof ConnectException) {
+                                    logger.error("PlayerService: CONNECTION REFUSED during profile creation for {}. Check player-service availability at {}: {}", username, BASE_URL, errorMessage);
+                                } else if (cause != null && cause.getMessage() != null && cause.getMessage().contains("409 Conflict")) {
                                     logger.warn("PlayerService: Race condition detected for {}. Profile already exists, retrying GET.", username);
                                     return getPlayerProfile(uuid, username)
                                             .thenApply(retryProfileWithStatus -> {
@@ -93,12 +98,18 @@ public class PlayerService {
                                                 }
                                             });
                                 }
-                                logger.error("PlayerService: Unexpected error during profile creation for {}: {}", username, ex.getMessage());
+                                logger.error("PlayerService: Unexpected error during profile creation for {}: {}", username, errorMessage);
                                 return CompletableFuture.completedFuture(null);
                             });
                 })
                 .exceptionally(ex -> {
-                    logger.error("PlayerService: Failed to load/create player profile for {}: {}", username, ex.getMessage());
+                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                    String errorMessage = cause.getClass().getName() + ": " + (cause.getMessage() != null ? cause.getMessage() : "No message");
+                    if (cause instanceof ConnectException) {
+                        logger.error("PlayerService: FATAL ConnectException during player profile loading/creation for {}. Check player-service availability at {}: {}", username, BASE_URL, errorMessage);
+                    } else {
+                        logger.error("PlayerService: Failed to load/create player profile for {}: {}", username, errorMessage);
+                    }
                     return null; // Return null instead of throwing
                 });
     }
@@ -146,7 +157,13 @@ public class PlayerService {
                     return new ProfileStatus(profile, response.statusCode());
                 })
                 .exceptionally(ex -> {
-                    logger.error("PlayerService (GET): HTTP request failed for {}: {}", username, ex.getMessage());
+                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                    String errorMessage = cause.getClass().getName() + ": " + (cause.getMessage() != null ? cause.getMessage() : "No message");
+                    if (cause instanceof ConnectException) {
+                        logger.error("PlayerService (GET): CONNECTION REFUSED for GET request {}. Check player-service availability at {}: {}", username, BASE_URL + "/profiles/" + uuid, errorMessage);
+                    } else {
+                        logger.error("PlayerService (GET): HTTP request failed for {}: {}", username, errorMessage);
+                    }
                     return new ProfileStatus(null, 0);
                 });
     }
@@ -184,7 +201,13 @@ public class PlayerService {
                     return createServerProfile(apiResponse);
                 })
                 .exceptionally(ex -> {
-                    logger.error("PlayerService (POST): HTTP request failed for {}: {}", uuid, ex.getMessage());
+                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                    String errorMessage = cause.getClass().getName() + ": " + (cause.getMessage() != null ? cause.getMessage() : "No message");
+                    if (cause instanceof ConnectException) {
+                        logger.error("PlayerService (POST): CONNECTION REFUSED for POST request {}. Check player-service availability at {}: {}", uuid, BASE_URL + "/profiles", errorMessage);
+                    } else {
+                        logger.error("PlayerService (POST): HTTP request failed for {}: {}", uuid, errorMessage);
+                    }
                     return null;
                 });
     }
