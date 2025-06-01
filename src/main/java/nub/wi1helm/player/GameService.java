@@ -84,7 +84,7 @@ public class GameService {
      */
     public CompletableFuture<Double> getPlayerTotalPlaytime(String uuid) {
         HttpRequest getRequest = HttpRequest.newBuilder()
-                .uri(URI.create(GAME_SERVICE_BASE_URL + "/game/player/" + uuid + "/playtime")) // Updated URI
+                .uri(URI.create(GAME_SERVICE_BASE_URL + "/game/player/" + uuid + "/playtime"))
                 .GET()
                 .header("Accept", "application/json")
                 .timeout(Duration.ofSeconds(8))
@@ -97,22 +97,22 @@ public class GameService {
                         return 0.0;
                     }
                     if (response.statusCode() != 200) {
-                        logger.error("GameService: Unexpected response status for player total playtime (GET {}): {}", response.statusCode(), response.body());
-                        throw new RuntimeException(String.format("Unexpected response status from GameService (GET playtime %d): %s", response.statusCode(), response.body()));
+                        logger.error("GameService: Unexpected response status {} for player total playtime {}: {}",
+                                response.statusCode(), uuid, response.body());
+                        return 0.0;
                     }
 
                     try {
                         PlaytimeResponse apiResponse = gson.fromJson(response.body(), PlaytimeResponse.class);
-                        // Safely get the playtime, handle potential null if JSON structure is off
                         return apiResponse != null ? apiResponse.getPlaytime() : 0.0;
                     } catch (JsonSyntaxException e) {
-                        logger.error("GameService: Failed to parse player total playtime JSON response for {}: {}", uuid, response.body(), e);
-                        throw new RuntimeException("Failed to parse player total playtime data: " + e.getMessage());
+                        logger.error("GameService: Failed to parse player total playtime JSON for {}: {}", uuid, e.getMessage());
+                        return 0.0;
                     }
                 })
                 .exceptionally(ex -> {
-                    logger.error("GameService: Exception fetching player total playtime for {}: {}", uuid, ex.getMessage(), ex);
-                    return 0.0; // Return 0.0 on exception
+                    logger.error("GameService: HTTP request failed for player total playtime {}: {}", uuid, ex.getMessage());
+                    return 0.0;
                 });
     }
 
@@ -125,7 +125,7 @@ public class GameService {
      */
     public CompletableFuture<Double> getPlayerDeltaPlaytime(String uuid) {
         HttpRequest getRequest = HttpRequest.newBuilder()
-                .uri(URI.create(GAME_SERVICE_BASE_URL + "/game/player/" + uuid + "/deltatime")) // Updated URI
+                .uri(URI.create(GAME_SERVICE_BASE_URL + "/game/player/" + uuid + "/deltatime"))
                 .GET()
                 .header("Accept", "application/json")
                 .timeout(Duration.ofSeconds(8))
@@ -138,22 +138,22 @@ public class GameService {
                         return 0.0;
                     }
                     if (response.statusCode() != 200) {
-                        logger.error("GameService: Unexpected response status for player delta playtime (GET {}): {}", response.statusCode(), response.body());
-                        throw new RuntimeException(String.format("Unexpected response status from GameService (GET deltatime %d): %s", response.statusCode(), response.body()));
+                        logger.error("GameService: Unexpected response status {} for player delta playtime {}: {}",
+                                response.statusCode(), uuid, response.body());
+                        return 0.0;
                     }
 
                     try {
                         DeltaPlaytimeResponse apiResponse = gson.fromJson(response.body(), DeltaPlaytimeResponse.class);
-                        // Safely get the deltatime, handle potential null if JSON structure is off
                         return apiResponse != null ? apiResponse.getDeltatime() : 0.0;
                     } catch (JsonSyntaxException e) {
-                        logger.error("GameService: Failed to parse player delta playtime JSON response for {}: {}", uuid, response.body(), e);
-                        throw new RuntimeException("Failed to parse player delta playtime data: " + e.getMessage());
+                        logger.error("GameService: Failed to parse player delta playtime JSON for {}: {}", uuid, e.getMessage());
+                        return 0.0;
                     }
                 })
                 .exceptionally(ex -> {
-                    logger.error("GameService: Exception fetching player delta playtime for {}: {}", uuid, ex.getMessage(), ex);
-                    return 0.0; // Return 0.0 on exception
+                    logger.error("GameService: HTTP request failed for player delta playtime {}: {}", uuid, ex.getMessage());
+                    return 0.0;
                 });
     }
 
@@ -165,9 +165,8 @@ public class GameService {
      * @return A CompletableFuture that will complete with the team's total playtime, or 0.0 if not found or an error occurs.
      */
     public CompletableFuture<Double> getTeamPlaytime(String teamId) {
-        // Correct endpoint: Now includes teamId as a path variable
         HttpRequest getRequest = HttpRequest.newBuilder()
-                .uri(URI.create(GAME_SERVICE_BASE_URL + "/game/team/" + teamId + "/playtime")) // Updated URI
+                .uri(URI.create(GAME_SERVICE_BASE_URL + "/game/team/" + teamId + "/playtime"))
                 .GET()
                 .header("Accept", "application/json")
                 .timeout(Duration.ofSeconds(8))
@@ -180,31 +179,24 @@ public class GameService {
                         return 0.0;
                     }
                     if (response.statusCode() != 200) {
-                        logger.error("GameService: Unexpected response status for team playtime (GET {}): {}", response.statusCode(), response.body());
-                        throw new RuntimeException(String.format("Unexpected response status from GameService (GET team playtime %d): %s", response.statusCode(), response.body()));
+                        logger.error("GameService: Unexpected response status {} for team playtime {}: {}",
+                                response.statusCode(), teamId, response.body());
+                        return 0.0;
                     }
 
                     try {
-                        // Parse into the new TeamTotalPlaytimeResponse object which now includes teamId
                         TeamTotalPlaytimeResponse apiResponse = gson.fromJson(response.body(), TeamTotalPlaytimeResponse.class);
-                        // Safely get the playtime, handle potential null if JSON structure is off
                         return apiResponse != null ? apiResponse.getTotalPlaytime() : 0.0;
                     } catch (JsonSyntaxException e) {
-                        logger.error("GameService: Failed to parse team playtime JSON response for team {}: {}", teamId, response.body(), e);
-                        throw new RuntimeException("Failed to parse team playtime data: " + e.getMessage());
+                        logger.error("GameService: Failed to parse team playtime JSON for team {}: {}", teamId, e.getMessage());
+                        return 0.0;
                     }
                 })
                 .exceptionally(ex -> {
-                    logger.error("GameService: Exception fetching team playtime for team {}: {}", teamId, ex.getMessage(), ex);
+                    logger.error("GameService: HTTP request failed for team playtime {}: {}", teamId, ex.getMessage());
                     return 0.0;
                 });
     }
-
-
-
-    // Add methods for HandlePlayerOnline, HandlePlayerOffline, HandleRefreshOnline, HandleBanPlayer, HandleUnbanPlayer
-    // if your Java client needs to trigger these actions. They would typically be POST requests.
-
 
     // DTO for PlayerUUIDRequest
     private static class PlayerUUIDRequest {
@@ -214,8 +206,6 @@ public class GameService {
 
     // Method to gracefully shutdown the HttpClient when needed
     public void shutdown() {
-        // In newer JDKs, HttpClient might have a close method for more explicit resource release.
-        // For simple cases, letting it be garbage collected after application shutdown is often sufficient.
         logger.info("GameService: Shutdown requested");
     }
 }
