@@ -20,12 +20,14 @@ public class RegistrarConfig {
     private final String minestomServerLabel;
     private final String minestomVersion;
     private final Set<HostAndPort> redisClusterNodes;
+    private final String redisPassword; // Add this field for the password
 
-    private RegistrarConfig(int minestomPort, String minestomServerLabel, String minestomVersion, Set<HostAndPort> redisClusterNodes) {
+    private RegistrarConfig(int minestomPort, String minestomServerLabel, String minestomVersion, Set<HostAndPort> redisClusterNodes, String redisPassword) {
         this.minestomPort = minestomPort;
         this.minestomServerLabel = minestomServerLabel;
         this.minestomVersion = minestomVersion;
         this.redisClusterNodes = redisClusterNodes;
+        this.redisPassword = redisPassword; // Initialize the password
     }
 
     /**
@@ -37,6 +39,7 @@ public class RegistrarConfig {
      * - MINECRAFT_SERVER_LABEL: A unique label for this Minestom server (e.g., "lobby-1").
      * - MINESTOM_VERSION: The Minestom version or build number (for metadata).
      * - REDIS_CLUSTER_ADDR: Comma-separated list of Redis cluster nodes (e.g., "localhost:6379,192.168.1.10:6380").
+     * - REDIS_PASSWORD: The password for the Redis cluster. (Optional, if no password is set)
      *
      * @return A new RegistrarConfig instance.
      * @throws IllegalStateException if any required environment variable is missing or malformed.
@@ -77,13 +80,22 @@ public class RegistrarConfig {
             throw new IllegalStateException("No valid Redis cluster nodes could be parsed from REDIS_CLUSTER_ADDR: " + redisAddr);
         }
 
+        // --- NEW: Load Redis password from environment variable ---
+        String redisPassword = System.getenv("REDIS_PASSWORD");
+        if (redisPassword == null || redisPassword.isEmpty()) {
+            logger.warn("Environment variable REDIS_PASSWORD not set. Assuming no password is required for Redis.");
+            // Set to null or empty string if no password is required
+            redisPassword = null;
+        }
+
         logger.info("Registrar configuration loaded:");
         logger.info("  Minestom Port: {}", parsedMinestomPort);
         logger.info("  Minestom Label: {}", minestomServerLabel);
         logger.info("  Minestom Version: {}", minestomVersion);
         logger.info("  Redis Cluster Nodes: {}", redisClusterNodes);
+        logger.info("  Redis Password Set: {}", (redisPassword != null && !redisPassword.isEmpty() ? "Yes" : "No")); // Don't log the actual password
 
-        return new RegistrarConfig(parsedMinestomPort, minestomServerLabel, minestomVersion, redisClusterNodes);
+        return new RegistrarConfig(parsedMinestomPort, minestomServerLabel, minestomVersion, redisClusterNodes, redisPassword);
     }
 
     /**
@@ -107,13 +119,17 @@ public class RegistrarConfig {
         devRedisNodes.add(new HostAndPort("localhost", 7004));
         devRedisNodes.add(new HostAndPort("localhost", 7005));
 
+        // For development, no password by default or a known dev password
+        String devRedisPassword = null; // Or "your_dev_password" if needed
+
         logger.info("Registrar development configuration loaded:");
         logger.info("  Minestom Port: {}", devMinestomPort);
         logger.info("  Minestom Label: {}", devMinestomServerLabel);
         logger.info("  Minestom Version: {}", devMinestomVersion);
         logger.info("  Redis Cluster Nodes: {}", devRedisNodes);
+        logger.info("  Redis Password Set: {}", (devRedisPassword != null && !devRedisPassword.isEmpty() ? "Yes" : "No"));
 
-        return new RegistrarConfig(devMinestomPort, devMinestomServerLabel, devMinestomVersion, devRedisNodes);
+        return new RegistrarConfig(devMinestomPort, devMinestomServerLabel, devMinestomVersion, devRedisNodes, devRedisPassword);
     }
 
 
@@ -130,7 +146,12 @@ public class RegistrarConfig {
     }
 
     public Set<HostAndPort> getRedisClusterNodes() {
-        return redisClusterNodes;
+        return Collections.unmodifiableSet(redisClusterNodes); // Make it unmodifiable
+    }
+
+    // --- NEW: Getter for Redis password ---
+    public String getRedisPassword() {
+        return redisPassword;
     }
 
     private static Set<HostAndPort> parseRedisAddresses(String addresses) {
@@ -146,8 +167,10 @@ public class RegistrarConfig {
                 try {
                     String host = parts[0];
                     int port = Integer.parseInt(parts[1]);
-                    if (port <= 0 || port > 65565) { // Fixed upper range for Minecraft ports
-                        logger.error("Invalid port number '{}' in Redis address '{}'. Port must be between 1 and 65565.", port, trimmedAddress);
+                    // Changed upper range for Redis ports, not Minecraft. Standard Redis port is 6379
+                    // Ensure this fits within your Jedis client's expectations for cluster ports (e.g. 16379 for cluster bus)
+                    if (port <= 0 || port > 65535) { // Valid port range
+                        logger.error("Invalid port number '{}' in Redis address '{}'. Port must be between 1 and 65535.", port, trimmedAddress);
                         continue;
                     }
                     nodes.add(new HostAndPort(host, port));

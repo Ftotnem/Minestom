@@ -4,10 +4,14 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import net.minestom.server.MinecraftServer; // Assuming this is still used for context, though not directly in the registration logic
+// import net.minestom.server.MinecraftServer; // Assuming this is still used for context, though not directly in the registration logic
+
+// --- IMPORTANT: Ensure these imports are correct ---
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig; // This specific import
+import redis.clients.jedis.Connection; // And this for the generic type
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.JedisCluster;
-import redis.clients.jedis.JedisPoolConfig;
+import redis.clients.jedis.JedisPoolConfig; // Keep this import as you are instantiating JedisPoolConfig
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -179,7 +183,30 @@ public class Registrar {
     public static Registrar createAndConfigure(RegistrarConfig config) {
         JedisCluster jedisCluster;
         try {
-            jedisCluster = new JedisCluster(config.getRedisClusterNodes());
+            // Configure JedisPoolConfig for connection pooling
+            // --- MODIFIED DECLARATION HERE ---
+            GenericObjectPoolConfig<Connection> poolConfig = new GenericObjectPoolConfig<>();
+            poolConfig.setMaxTotal(128); // Max active connections
+            poolConfig.setMaxIdle(128); // Max idle connections
+            poolConfig.setMinIdle(16);  // Min idle connections
+            poolConfig.setTestOnBorrow(true); // Test connections when borrowed
+            poolConfig.setTestOnReturn(true); // Test connections when returned
+            poolConfig.setTestWhileIdle(true); // Test connections while idle
+            poolConfig.setMinEvictableIdleTimeMillis(Duration.ofSeconds(60).toMillis());
+            poolConfig.setTimeBetweenEvictionRunsMillis(Duration.ofSeconds(30).toMillis());
+            poolConfig.setNumTestsPerEvictionRun(3);
+            poolConfig.setBlockWhenExhausted(true); // Block when pool is exhausted
+
+            // Pass the password to JedisCluster constructor
+            jedisCluster = new JedisCluster(
+                    config.getRedisClusterNodes(),
+                    2000, // connectionTimeoutMillis
+                    2000, // soTimeoutMillis
+                    5,    // maxAttempts
+                    config.getRedisPassword(), // Pass the password here
+                    poolConfig
+            );
+
             // Simple test to ensure connection
             jedisCluster.hgetAll("test_connection");
             logger.info("Successfully connected to Redis cluster: {}", config.getRedisClusterNodes());
