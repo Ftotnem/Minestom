@@ -5,6 +5,7 @@ import net.minestom.server.MinecraftServer;
 import net.minestom.server.color.Color;
 import net.minestom.server.coordinate.BlockVec;
 import net.minestom.server.instance.Chunk;
+import net.minestom.server.instance.InstanceContainer;
 import net.minestom.server.instance.anvil.AnvilLoader;
 import net.minestom.server.registry.DynamicRegistry;
 import net.minestom.server.world.DimensionType;
@@ -16,7 +17,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-public class ServerInstance extends net.minestom.server.instance.InstanceContainer {
+public class ServerInstance extends InstanceContainer {
 
     private int CHUNK_RADIUS_X = 4;
     private int CHUNK_RADIUS_Z = 2;
@@ -33,6 +34,7 @@ public class ServerInstance extends net.minestom.server.instance.InstanceContain
         MinecraftServer.getBiomeRegistry().register(Key.key("main"),biome);
 
         setTime(1000);
+        setTimeRate(0);
 
         for (int x = -CHUNK_RADIUS_X; x <= CHUNK_RADIUS_X; x++) {
             for (int z = -CHUNK_RADIUS_Z; z <= CHUNK_RADIUS_Z; z++) {

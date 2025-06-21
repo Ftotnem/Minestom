@@ -1,19 +1,19 @@
 package nub.wi1helm;
 
 import net.minestom.server.MinecraftServer;
-import net.minestom.server.entity.GameMode;
-import net.minestom.server.event.GlobalEventHandler;
-import net.minestom.server.event.player.AsyncPlayerConfigurationEvent;
-import net.minestom.server.event.player.PlayerDisconnectEvent;
-import net.minestom.server.event.player.PlayerSpawnEvent;
+
 import net.minestom.server.extras.velocity.VelocityProxy;
 import net.minestom.server.instance.Instance;
+import nub.wi1helm.listener.PlayerDiggingListener;
+import net.minestom.server.network.packet.client.play.ClientPlayerDiggingPacket;
 import nub.wi1helm.game.GameHandler;
+import nub.wi1helm.listener.Global;
 import nub.wi1helm.register.Registrar;
 import nub.wi1helm.register.RegistrarConfig; // Import RegistrarConfig
 import nub.wi1helm.server.ServerInstance;
 import nub.wi1helm.server.ServerPlayer;
 import nub.wi1helm.server.ServerSidebar;
+import nub.wi1helm.template.Template;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,38 +21,26 @@ public class Main {
 
     public static Logger logger = LoggerFactory.getLogger(Main.class);
     public static Instance instance;
+    public static Global global;
     private static Registrar registrar;
 
     public static void main(String[] args) {
         logger.info("Starting Minestom application...");
 
         MinecraftServer server = MinecraftServer.init();
+
+        MinecraftServer.getPacketListenerManager().setPlayListener(ClientPlayerDiggingPacket.class, PlayerDiggingListener::playerDiggingListener);
+
         MinecraftServer.getConnectionManager().setPlayerProvider(ServerPlayer::new);
         MinecraftServer.setCompressionThreshold(0);
         VelocityProxy.enable(System.getenv().getOrDefault("VELOCITY_SECRET", "balle123"));
 
         instance = new ServerInstance();
+        global = new Global();
+
         ServerSidebar.create();
         GameHandler.create();
-
-        GlobalEventHandler globalEventHandler = MinecraftServer.getGlobalEventHandler();
-        globalEventHandler.addListener(AsyncPlayerConfigurationEvent.class, event -> {
-            final ServerPlayer player = (ServerPlayer) event.getPlayer();
-            event.setSpawningInstance(instance);
-            player.setGameMode(GameMode.SPECTATOR);
-        });
-
-        globalEventHandler.addListener(PlayerSpawnEvent.class, event -> {
-            final ServerPlayer player = (ServerPlayer) event.getPlayer();
-            if (player.getServerProfile().isFirstJoin()) {
-                GameHandler.playTeamSelectAnimation(player, player.getServerTeam());
-            }
-            player.sendMessage(player.getServerTeam().name());
-        });
-
-        globalEventHandler.addListener(PlayerDisconnectEvent.class, event -> {
-            final ServerPlayer player = (ServerPlayer) event.getPlayer();
-        });
+        Template.init();
 
         try {
             // Choose configuration based on an environment variable, e.g., "ENVIRONMENT=dev"

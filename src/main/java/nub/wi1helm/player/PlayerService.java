@@ -1,4 +1,3 @@
-// Updated PlayerService.java with Enhanced Error Logging
 package nub.wi1helm.player;
 
 import com.google.gson.*;
@@ -6,7 +5,7 @@ import nub.wi1helm.server.ServerProfile;
 import nub.wi1helm.server.ServerTeam;
 import org.jetbrains.annotations.NotNull;
 
-import java.net.ConnectException; // Import ConnectException
+import java.net.ConnectException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -18,17 +17,13 @@ import java.util.concurrent.CompletableFuture;
 import static nub.wi1helm.Main.logger;
 
 public class PlayerService {
-
-    // Singleton instance
     private static volatile PlayerService instance;
     private static final Object lock = new Object();
-
-    private static final String BASE_URL = "http://player-service:8081";
+    private static final String BASE_URL = "http://localhost:8081";
 
     private final HttpClient httpClient;
     private final Gson gson;
 
-    // Private constructor to prevent direct instantiation
     private PlayerService() {
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
@@ -36,19 +31,15 @@ public class PlayerService {
                 .build();
 
         this.gson = new GsonBuilder()
-                .registerTypeAdapter(Instant.class, (JsonSerializer<Instant>) (src, typeOfSrc, context) -> {
-                    return src == null ? JsonNull.INSTANCE : new JsonPrimitive(src.toString());
-                })
+                .registerTypeAdapter(Instant.class, (JsonSerializer<Instant>) (src, typeOfSrc, context) ->
+                        src == null ? JsonNull.INSTANCE : new JsonPrimitive(src.toString()))
                 .registerTypeAdapter(Instant.class, (JsonDeserializer<Instant>) (json, typeOfT, context) -> {
-                    if (json.isJsonNull() || json.getAsString().isEmpty()) {
-                        return null;
-                    }
+                    if (json.isJsonNull() || json.getAsString().isEmpty()) return null;
                     return Instant.parse(json.getAsString());
                 })
                 .create();
     }
 
-    // Thread-safe singleton getter
     public static PlayerService getInstance() {
         if (instance == null) {
             synchronized (lock) {
@@ -60,119 +51,60 @@ public class PlayerService {
         return instance;
     }
 
+    /**
+     * Loads player profile with essential data only (team, banned status, first join)
+     * Playtime data is fetched separately from GameService
+     */
     public CompletableFuture<ServerProfile> loadPlayerProfile(@NotNull String uuid, @NotNull String username) {
         return getPlayerProfile(uuid, username)
-                .thenCompose(profileWithStatus -> {
-                    if (profileWithStatus.profile != null) {
-                        logger.info("PlayerService: Loaded existing player data for {}.", username);
-                        return CompletableFuture.completedFuture(profileWithStatus.profile);
+                .thenCompose(profile -> {
+                    if (profile != null) {
+                        logger.info("PlayerService: Loaded existing player {} (team: {}, banned: {}, currentPlaytime: {})",
+                                username, profile.getServerTeam(), profile.isBanned(), profile.getCurrentPlaytime());
+                        return CompletableFuture.completedFuture(profile);
                     }
 
-                    logger.info("PlayerService: Player profile not found for {}. Attempting to create.", username);
-                    return createPlayerProfile(uuid)
-                            .thenCompose(createdProfile -> {
-                                if (createdProfile != null) {
-                                    logger.info("PlayerService: Player profile newly created for {}.", username);
-                                    createdProfile.setFirstJoin(true);
-                                    return CompletableFuture.completedFuture(createdProfile);
-                                } else {
-                                    logger.warn("PlayerService: Failed to create profile for {}. Returning null.", username);
-                                    return CompletableFuture.completedFuture(null);
-                                }
-                            })
-                            .exceptionallyCompose(ex -> {
-                                Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                                String errorMessage = cause.getClass().getName() + ": " + (cause.getMessage() != null ? cause.getMessage() : "No message");
-                                if (cause instanceof ConnectException) {
-                                    logger.error("PlayerService: CONNECTION REFUSED during profile creation for {}. Check player-service availability at {}: {}", username, BASE_URL, errorMessage);
-                                } else if (cause != null && cause.getMessage() != null && cause.getMessage().contains("409 Conflict")) {
-                                    logger.warn("PlayerService: Race condition detected for {}. Profile already exists, retrying GET.", username);
-                                    return getPlayerProfile(uuid, username)
-                                            .thenApply(retryProfileWithStatus -> {
-                                                if (retryProfileWithStatus.profile != null) {
-                                                    logger.info("PlayerService: Successfully retrieved profile for {} after conflict.", username);
-                                                    return retryProfileWithStatus.profile;
-                                                } else {
-                                                    logger.error("PlayerService: Failed to retrieve profile for {} even after conflict resolution.", username);
-                                                    return null;
-                                                }
-                                            });
-                                }
-                                logger.error("PlayerService: Unexpected error during profile creation for {}: {}", username, errorMessage);
-                                return CompletableFuture.completedFuture(null);
-                            });
+                    logger.info("PlayerService: Creating new profile for {}", username);
+                    return createPlayerProfile(uuid, username);
                 })
                 .exceptionally(ex -> {
-                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                    String errorMessage = cause.getClass().getName() + ": " + (cause.getMessage() != null ? cause.getMessage() : "No message");
-                    if (cause instanceof ConnectException) {
-                        logger.error("PlayerService: FATAL ConnectException during player profile loading/creation for {}. Check player-service availability at {}: {}", username, BASE_URL, errorMessage);
-                    } else {
-                        logger.error("PlayerService: Failed to load/create player profile for {}: {}", username, errorMessage);
-                    }
-                    return null; // Return null instead of throwing
+                    handleLoadingError(ex, username);
+                    return null;
                 });
     }
 
-    private static class ProfileStatus {
-        ServerProfile profile;
-        int statusCode;
-
-        ProfileStatus(ServerProfile profile, int statusCode) {
-            this.profile = profile;
-            this.statusCode = statusCode;
-        }
-    }
-
-    private CompletableFuture<ProfileStatus> getPlayerProfile(@NotNull String uuid, @NotNull String username) {
-        HttpRequest getRequest = HttpRequest.newBuilder()
+    private CompletableFuture<ServerProfile> getPlayerProfile(@NotNull String uuid, @NotNull String username) {
+        HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(BASE_URL + "/profiles/" + uuid))
                 .GET()
                 .header("Accept", "application/json")
                 .timeout(Duration.ofSeconds(8))
                 .build();
 
-        return httpClient.sendAsync(getRequest, HttpResponse.BodyHandlers.ofString())
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
-                    logger.debug("PlayerService (GET): Received HTTP response for {}. Status: {}, Body: {}", username, response.statusCode(), response.body());
-
                     if (response.statusCode() == 404) {
-                        return new ProfileStatus(null, response.statusCode());
+                        return null; // Profile doesn't exist
                     }
-
                     if (response.statusCode() != 200) {
-                        logger.error("PlayerService (GET): Unexpected response status {} for {}: {}", response.statusCode(), username, response.body());
-                        return new ProfileStatus(null, response.statusCode());
+                        logger.error("Unexpected response {} for {}: {}",
+                                response.statusCode(), username, response.body());
+                        return null;
                     }
 
-                    PlayerApiResponse apiResponse = parseApiResponse(response.body(), username);
-                    if (apiResponse == null) {
-                        return new ProfileStatus(null, response.statusCode());
-                    }
-
-                    ServerProfile profile = createServerProfile(apiResponse);
-                    if (profile != null) {
-                        profile.setFirstJoin(false);
-                    }
-                    return new ProfileStatus(profile, response.statusCode());
+                    return parseProfileResponse(response.body(), username, false);
                 })
                 .exceptionally(ex -> {
-                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                    String errorMessage = cause.getClass().getName() + ": " + (cause.getMessage() != null ? cause.getMessage() : "No message");
-                    if (cause instanceof ConnectException) {
-                        logger.error("PlayerService (GET): CONNECTION REFUSED for GET request {}. Check player-service availability at {}: {}", username, BASE_URL + "/profiles/" + uuid, errorMessage);
-                    } else {
-                        logger.error("PlayerService (GET): HTTP request failed for {}: {}", username, errorMessage);
-                    }
-                    return new ProfileStatus(null, 0);
+                    logConnectionError(ex, "GET", username);
+                    return null;
                 });
     }
 
-    private CompletableFuture<ServerProfile> createPlayerProfile(@NotNull String uuid) {
+    private CompletableFuture<ServerProfile> createPlayerProfile(@NotNull String uuid, @NotNull String username) {
         JsonObject requestBody = new JsonObject();
         requestBody.addProperty("uuid", uuid);
 
-        HttpRequest postRequest = HttpRequest.newBuilder()
+        HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(BASE_URL + "/profiles"))
                 .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(requestBody)))
                 .header("Content-Type", "application/json")
@@ -180,67 +112,102 @@ public class PlayerService {
                 .timeout(Duration.ofSeconds(8))
                 .build();
 
-        return httpClient.sendAsync(postRequest, HttpResponse.BodyHandlers.ofString())
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .thenApply(response -> {
-                    logger.debug("PlayerService (POST): Received HTTP response for {}. Status: {}, Body: {}", uuid, response.statusCode(), response.body());
-
                     if (response.statusCode() == 409) {
-                        logger.warn("PlayerService (POST): Profile already exists for {}", uuid);
-                        return null; // Will trigger race condition handling in parent method
+                        // Race condition - profile was created by another thread
+                        logger.warn("Race condition detected for {}, retrying GET", username);
+                        return null; // This will trigger a retry in the calling method
                     }
                     if (response.statusCode() != 201) {
-                        logger.error("PlayerService (POST): Unexpected response status {} for {}: {}", response.statusCode(), uuid, response.body());
+                        logger.error("Failed to create profile for {}: {} - {}",
+                                username, response.statusCode(), response.body());
                         return null;
                     }
 
-                    PlayerApiResponse apiResponse = parseApiResponse(response.body(), uuid);
-                    if (apiResponse == null) {
-                        return null;
-                    }
-
-                    return createServerProfile(apiResponse);
+                    return parseProfileResponse(response.body(), username, true);
                 })
                 .exceptionally(ex -> {
-                    Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                    String errorMessage = cause.getClass().getName() + ": " + (cause.getMessage() != null ? cause.getMessage() : "No message");
-                    if (cause instanceof ConnectException) {
-                        logger.error("PlayerService (POST): CONNECTION REFUSED for POST request {}. Check player-service availability at {}: {}", uuid, BASE_URL + "/profiles", errorMessage);
-                    } else {
-                        logger.error("PlayerService (POST): HTTP request failed for {}: {}", uuid, errorMessage);
-                    }
+                    logConnectionError(ex, "POST", username);
                     return null;
+                })
+                .thenCompose(profile -> {
+                    if (profile == null) {
+                        // Retry GET in case of race condition
+                        logger.info("Retrying profile fetch for {} after creation conflict", username);
+                        return getPlayerProfile(uuid, username);
+                    }
+                    return CompletableFuture.completedFuture(profile);
                 });
     }
 
-    private PlayerApiResponse parseApiResponse(String jsonBody, String identifier) {
+    private ServerProfile parseProfileResponse(String jsonBody, String username, boolean isFirstJoin) {
         try {
-            return gson.fromJson(jsonBody, PlayerApiResponse.class);
-        } catch (JsonSyntaxException e) {
-            logger.error("PlayerService: Failed to parse JSON response for {}: {}", identifier, e.getMessage());
-            return null;
-        }
-    }
+            // --- IMPORTANT: ADD/CONFIRM THESE LINES TO LOG RECEIVED JSON AND PARSED OBJECT ---
+            logger.info("DEBUG: PlayerService: Raw JSON response for {}: {}", username, jsonBody); // Log the raw JSON received
+            // --- END IMPORTANT ADDED LINES ---
 
-    private ServerProfile createServerProfile(PlayerApiResponse apiResponse) {
-        try {
-            return new ServerProfile(
+            PlayerApiResponse apiResponse = gson.fromJson(jsonBody, PlayerApiResponse.class);
+            if (apiResponse == null) {
+                logger.error("Null API response for {}", username);
+                return null;
+            }
+
+            // --- IMPORTANT: LOG THE PARSED VALUES FROM THE PlayerApiResponse ---
+            logger.info("DEBUG: PlayerService: Parsed PlayerApiResponse for {}: uuid={}, username={}, team={}, currentPlaytime={}, deltaPlaytime={}",
+                    username,
                     apiResponse.getUuid(),
                     apiResponse.getUsername(),
-                    apiResponse.getTotalPlaytimeTicks(),
-                    apiResponse.getDeltaPlaytimeTicks(),
+                    apiResponse.getTeam(),
+                    apiResponse.getCurrentPlaytime(),     // Verify this is correct after deserialization
+                    apiResponse.getDeltaPlaytime());
+            // --- END IMPORTANT ADDED LINES ---
+
+            ServerProfile profile = new ServerProfile(
+                    apiResponse.getUuid(),
+                    apiResponse.getUsername(),
+                    apiResponse.getTeamUsername(),
+                    apiResponse.getCurrentPlaytime(),    // This should now be using the value from apiResponse
+                    apiResponse.getDeltaPlaytime(),
                     apiResponse.isBanned(),
                     apiResponse.getBanExpiresAt(),
                     ServerTeam.fromString(apiResponse.getTeam()),
                     apiResponse.getLastLoginAt(),
                     apiResponse.getCreatedAt()
             );
+
+            profile.setFirstJoin(isFirstJoin);
+            return profile;
+
+        } catch (JsonSyntaxException e) {
+            logger.error("Failed to parse profile JSON for {}: {}", username, e.getMessage());
+            return null;
         } catch (Exception e) {
-            logger.error("PlayerService: Failed to create ServerProfile: {}", e.getMessage());
+            logger.error("Failed to create ServerProfile for {}: {}", username, e.getMessage());
             return null;
         }
     }
 
-    // Method to gracefully shutdown the HttpClient when needed
+    private void handleLoadingError(Throwable ex, String username) {
+        Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+        if (cause instanceof ConnectException) {
+            logger.error("FATAL: Cannot connect to player service for {}. Check service at {}",
+                    username, BASE_URL);
+        } else {
+            logger.error("Failed to load/create profile for {}: {}", username, cause.getMessage());
+        }
+    }
+
+    private void logConnectionError(Throwable ex, String method, String username) {
+        Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+        if (cause instanceof ConnectException) {
+            logger.error("Connection refused during {} for {}. Check player service at {}",
+                    method, username, BASE_URL);
+        } else {
+            logger.error("HTTP {} request failed for {}: {}", method, username, cause.getMessage());
+        }
+    }
+
     public void shutdown() {
         logger.info("PlayerService: Shutdown requested");
     }

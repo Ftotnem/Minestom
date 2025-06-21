@@ -8,6 +8,7 @@ import net.kyori.adventure.title.Title;
 import net.minestom.server.coordinate.Pos;
 import net.minestom.server.entity.Entity;
 import net.minestom.server.MinecraftServer;
+import net.minestom.server.entity.GameMode;
 import net.minestom.server.timer.TaskSchedule;
 import nub.wi1helm.Main;
 import nub.wi1helm.player.GameService;
@@ -52,9 +53,9 @@ public class GameHandler {
         teamPlaytimeDisplays.put(ServerTeam.AQUA_CREEPERS, creeperDisplay);
 
         // Create Text Display for PURPLE_SWORDERS using the separate class
-        Entity swordersDisplay = new CustomPlaytimeTextDisplay(ServerTeam.PURPLE_SWORDERS);
+        Entity swordersDisplay = new CustomPlaytimeTextDisplay(ServerTeam.PURPLE_AXOLOTLS);
         swordersDisplay.setInstance(Main.instance, new Pos(40.0, -32, 8.0, 90, 0));
-        teamPlaytimeDisplays.put(ServerTeam.PURPLE_SWORDERS, swordersDisplay);
+        teamPlaytimeDisplays.put(ServerTeam.PURPLE_AXOLOTLS, swordersDisplay);
 
         // Schedule periodic updates for the local data cache
         dataFetchScheduler.scheduleAtFixedRate(GameHandler::fetchAndUpdateLocalPlaytimeCache,
@@ -97,7 +98,7 @@ public class GameHandler {
      * @param selectedTeam The team that the player will be assigned to after the animation.
      */
     public static void playTeamSelectAnimation(ServerPlayer player, ServerTeam selectedTeam) {
-        final Queue<ServerTeam> choices = new ArrayDeque<>(List.of(ServerTeam.AQUA_CREEPERS, ServerTeam.PURPLE_SWORDERS));
+        final Queue<ServerTeam> choices = new ArrayDeque<>(List.of(ServerTeam.AQUA_CREEPERS, ServerTeam.PURPLE_AXOLOTLS));
 
         double currentDelaySeconds = 1.0;
         final double decrementSeconds = 0.05;
@@ -147,37 +148,11 @@ public class GameHandler {
                     Component.text(selectedTeam.displayName()).color(selectedTeam.color()),
                     Component.empty()
             ));
+            // REMOVE direct teleport and setGameMode here.
+            // Instead, call the method designed to handle the state transition:
+            player.completeTeamSelection(); // <--- THIS IS THE FIX!
             return null;
         }, TaskSchedule.tick(finalDelay));
-    }
-
-    /**
-     * Calculates the estimated total duration of the team selection animation in milliseconds.
-     * This is an approximation used by ServerTeamHandler to schedule the actual team assignment.
-     */
-    public static long getAnimationDurationMillis() {
-        double currentDelaySeconds = 1.0;
-        final double decrementSeconds = 0.05;
-        final double minimumDelaySeconds = 0.05;
-        final int minimumIterationsAtFastSpeed = 8;
-        double totalDurationSeconds = 0;
-
-        int fastIterationsCount = 0;
-        while (currentDelaySeconds >= minimumDelaySeconds || fastIterationsCount < minimumIterationsAtFastSpeed) {
-            double delay = Math.max(currentDelaySeconds, minimumDelaySeconds);
-            totalDurationSeconds += delay;
-
-            if (currentDelaySeconds <= minimumDelaySeconds) {
-                fastIterationsCount++;
-            }
-
-            if (currentDelaySeconds > minimumDelaySeconds) {
-                currentDelaySeconds -= decrementSeconds;
-            }
-        }
-        totalDurationSeconds += (10.0 / 20.0); // 10 ticks buffer
-
-        return (long) (totalDurationSeconds * 1000);
     }
 
     /**

@@ -30,7 +30,7 @@ public class ServerSidebar {
                     // Cache the sidebar for future updates#ff75aa
                     sidebarCache.put(player.getUuid(), sidebar);
                 } else {
-                    //hello
+                    sidebar.addViewer(player);
                 }
             }
             return TaskSchedule.tick(1); // Run every tick for smoother animation

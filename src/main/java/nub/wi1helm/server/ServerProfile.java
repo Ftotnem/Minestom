@@ -9,7 +9,8 @@ import java.time.Instant;
 public class ServerProfile {
     private final String uuid;
     private final String username;
-    private double playtime;
+    private final String teamUsername;
+    private double currentPlaytime;
     private double deltaPlaytime;
     private boolean banned;
     private @Nullable Instant banExpiresAt; // New field for ban expiration
@@ -21,7 +22,8 @@ public class ServerProfile {
     public ServerProfile(
             @NotNull String uuid,
             @NotNull String username,
-            double playtime,
+            @NotNull String teamUsername,
+            double currentPlaytime,
             double deltaPlaytime,
             boolean banned,
             @Nullable Instant banExpiresAt, // Added to constructor
@@ -30,7 +32,8 @@ public class ServerProfile {
             @Nullable Instant createdAt) {
         this.uuid = uuid;
         this.username = username;
-        this.playtime = playtime;
+        this.teamUsername = teamUsername;
+        this.currentPlaytime = currentPlaytime;
         this.deltaPlaytime = deltaPlaytime;
         this.banned = banned;
         this.banExpiresAt = banExpiresAt; // Assign
@@ -43,7 +46,8 @@ public class ServerProfile {
     // --- Getters ---
     public @NotNull String getUuid() { return uuid; }
     public @NotNull String getUsername() { return username; }
-    public double getPlaytime() { return playtime; }
+    public @NotNull String getTeamUsername() { return teamUsername; }
+    public double getCurrentPlaytime() { return currentPlaytime; }
     public double getDeltaPlaytime() { return deltaPlaytime; }
     public boolean isBanned() { return banned; }
     public @Nullable Instant getBanExpiresAt() { return banExpiresAt; } // Getter for new field
@@ -53,7 +57,7 @@ public class ServerProfile {
     public boolean isFirstJoin() { return isFirstJoin; } // Getter for new field
 
     // --- Setters (for fields that might change post-load if needed, or by internal logic) ---
-    public void setPlaytime(double playtime) { this.playtime = playtime; }
+    public void setPlaytime(double currentPlaytime) { this.currentPlaytime = currentPlaytime; }
     public void setDeltaPlaytime(double deltaPlaytime) { this.deltaPlaytime = deltaPlaytime; }
     public void setBanned(boolean banned) { this.banned = banned; }
     public void setBanExpiresAt(@Nullable Instant banExpiresAt) { this.banExpiresAt = banExpiresAt; }
