@@ -53,9 +53,9 @@ public class GameHandler {
         teamPlaytimeDisplays.put(ServerTeam.AQUA_CREEPERS, creeperDisplay);
 
         // Create Text Display for PURPLE_SWORDERS using the separate class
-        Entity swordersDisplay = new CustomPlaytimeTextDisplay(ServerTeam.PURPLE_AXOLOTLS);
-        swordersDisplay.setInstance(Main.instance, new Pos(40.0, -32, 8.0, 90, 0));
-        teamPlaytimeDisplays.put(ServerTeam.PURPLE_AXOLOTLS, swordersDisplay);
+        Entity axolotlDisplay = new CustomPlaytimeTextDisplay(ServerTeam.PURPLE_AXOLOTLS);
+        axolotlDisplay.setInstance(Main.instance, new Pos(40.0, -32, 8.0, 90, 0));
+        teamPlaytimeDisplays.put(ServerTeam.PURPLE_AXOLOTLS, axolotlDisplay);
 
         // Schedule periodic updates for the local data cache
         dataFetchScheduler.scheduleAtFixedRate(GameHandler::fetchAndUpdateLocalPlaytimeCache,

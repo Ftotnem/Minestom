@@ -7,11 +7,21 @@ import nub.wi1helm.server.ServerTeam;
 
 
 public class TimeContentUtil {
-    public static Point transformToAbsolute(Point local, ServerTeam team) {
+    public static Point transformToAbsolute(TimeContent content, ServerTeam team) {
         return switch (team) {
-            case AQUA_CREEPERS -> local.mul(1, 1, -1).add(team.getPos());
-            case PURPLE_AXOLOTLS -> local.mul(-1, 1, 1).add(team.getPos());
-            default -> Pos.ZERO;
+            case AQUA_CREEPERS -> {
+                yield content.getLocalPos().mul(1, 1, 1).add(team.getPos());
+            }
+            case PURPLE_AXOLOTLS -> {
+                // This is the key change:
+                if (content instanceof TimeBlock block) {
+
+                    yield block.getLocalPos().mul(-1, 1, -1).add(team.getPos()).add(new Pos(-1,0,-1));
+                }
+
+                yield content.getLocalPos().mul(-1, 1, -1).add(team.getPos());
+            }
+            default -> Pos.ZERO; // Assuming Pos.ZERO is compatible with Point
         };
     }
 

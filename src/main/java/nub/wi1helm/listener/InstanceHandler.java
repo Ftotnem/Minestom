@@ -8,24 +8,24 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 
-public class InstanceListener {
+public class InstanceHandler {
 
     EventNode<InstanceEvent> node = EventNode.type("instance", EventFilter.INSTANCE);
 
-    static InstanceListener instance;
+    static InstanceHandler instance;
 
-    private InstanceListener(EventNode<Event> global) {
+    private InstanceHandler(EventNode<Event> global) {
         global.addChild(this.node);
     }
 
     @NotNull
-    public static InstanceListener getInstance(EventNode<Event> global) {
-        if (instance == null) return new InstanceListener(global);
+    public static InstanceHandler getInstance(EventNode<Event> global) {
+        if (instance == null) return new InstanceHandler(global);
         return instance;
     }
 
     @Nullable
-    public static InstanceListener getInstance() {
+    public static InstanceHandler getInstance() {
         return instance;
     }
 }

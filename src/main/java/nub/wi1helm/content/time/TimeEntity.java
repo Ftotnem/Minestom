@@ -39,7 +39,7 @@ public class TimeEntity extends Entity implements TimeContent {
     public Collection<SendablePacket> getSpawnPackets(ServerPlayer player) {
         List<SendablePacket> packets = new ArrayList<>();
 
-        Pos absolutePos = new Pos(TimeContentUtil.transformToAbsolute(localPos, player.getServerTeam()));
+        Pos absolutePos = new Pos(TimeContentUtil.transformToAbsolute(this, player.getServerTeam()));
         this.setInstance(Main.instance, absolutePos);
 
         SpawnEntityPacket spawnPacket = getSpawnPacket();

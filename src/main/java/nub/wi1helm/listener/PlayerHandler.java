@@ -1,28 +1,24 @@
 package nub.wi1helm.listener;
 
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.minestom.server.entity.GameMode;
 import net.minestom.server.event.Event;
 import net.minestom.server.event.EventFilter;
 import net.minestom.server.event.EventNode;
 import net.minestom.server.event.player.*;
-import net.minestom.server.event.trait.InstanceEvent;
 import net.minestom.server.event.trait.PlayerEvent;
-import net.minestom.server.listener.PlayerDiggingListener;
-import nub.wi1helm.game.GameHandler;
 import nub.wi1helm.inventory.DefaultInventory;
 import nub.wi1helm.server.ServerPlayer;
 import nub.wi1helm.server.ServerTeam;
 import org.jetbrains.annotations.NotNull;
 import javax.annotation.Nullable;
 
-public class PlayerListener {
+public class PlayerHandler {
 
-    EventNode<PlayerEvent> node = EventNode.type("instance", EventFilter.PLAYER);
+    EventNode<PlayerEvent> node = EventNode.type("player", EventFilter.PLAYER);
 
-    static PlayerListener instance;
+    static PlayerHandler instance;
 
-    private PlayerListener(EventNode<Event> global) {
+    private PlayerHandler(EventNode<Event> global) {
         global.addChild(this.node);
 
         join();
@@ -32,13 +28,13 @@ public class PlayerListener {
     }
 
     @NotNull
-    public static PlayerListener getInstance(EventNode<Event> global) {
-        if (instance == null) return new PlayerListener(global);
+    public static PlayerHandler getInstance(EventNode<Event> global) {
+        if (instance == null) return new PlayerHandler(global);
         return instance;
     }
 
     @Nullable
-    public static PlayerListener getInstance() {
+    public static PlayerHandler getInstance() {
         return instance;
     }
 
@@ -60,6 +56,8 @@ public class PlayerListener {
             final ServerPlayer player = (ServerPlayer) event.getPlayer();
             player.applyInitialSpawnLogic();
             new DefaultInventory().constructPlayerInventory(player);
+
+            player.sendPlayerListHeaderAndFooter(MiniMessage.miniMessage().deserialize("<gradient:#00d2ff:#3a47d5><bold>Race To 10 Million</bold></gradient>"), MiniMessage.miniMessage().deserialize("<gradient:#3a47d5:#00d2ff>shop.raceto10m.com</gradient>"));
         });
     }
 

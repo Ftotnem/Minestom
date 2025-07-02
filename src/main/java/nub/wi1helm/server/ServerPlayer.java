@@ -2,6 +2,7 @@ package nub.wi1helm.server;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.title.Title;
 import net.minestom.server.MinecraftServer;
 import net.minestom.server.entity.Player;
 import net.minestom.server.entity.PlayerSkin;
@@ -11,6 +12,7 @@ import net.minestom.server.network.player.GameProfile;
 import net.minestom.server.network.player.PlayerConnection;
 import net.minestom.server.coordinate.Pos;
 import nub.wi1helm.Main;
+import nub.wi1helm.content.time.ContentFactoryEntry;
 import nub.wi1helm.game.GameHandler;
 import nub.wi1helm.player.GameService;
 import nub.wi1helm.player.PlayerDataManager;
@@ -31,10 +33,10 @@ public class ServerPlayer extends Player {
     private final PlayerDataManager dataManager;
     private final GameService gameService;
     private Pos intendedSpawnPoint;
-    private final Set<TimeContent> receivedTimeContentViews = new HashSet<>();
-
-    // Map to store this player's specific instances of TimeContent, keyed by class name.
     private final Map<String, TimeContent> playerTimeContents = new HashMap<>();
+
+    // A set to store the identifiers of TimeContent views already sent.
+    private final Set<String> receivedTimeContentViews = new HashSet<>();
 
     // A flag to track if initial spawn logic has been applied.
     private final AtomicBoolean initialSpawnLogicApplied = new AtomicBoolean(false);
@@ -51,6 +53,8 @@ public class ServerPlayer extends Player {
 
         setupDataCallbacks();
         startDataLoading();
+
+
     }
 
     /**
@@ -58,7 +62,6 @@ public class ServerPlayer extends Player {
      * This method should be called AFTER the player has been assigned to an Instance.
      */
     private void initializePlayerTimeContents() {
-        // Only initialize if the player has an instance and content hasn't been initialized yet.
         if (this.getInstance() == null) {
             logger.error("Attempted to initialize TimeContent for player {} before instance was set.", getUsername());
             return;
@@ -68,15 +71,18 @@ public class ServerPlayer extends Player {
             return;
         }
 
-        // Iterate through all content factories from the global manager
-        for (TimeContentFactory factory : TimeContentManager.getInstance().getContentFactories()) {
+        // Iterate through all content factories from the global manager, now with their identifiers
+        for (ContentFactoryEntry entry : TimeContentManager.getInstance().getContentFactories()) {
             try {
-                // Create a new instance of content for THIS PLAYER, passing their current instance
-                TimeContent content = factory.create(this.getInstance());
+                // Create a new instance of content for THIS PLAYER
+                TimeContent content = entry.factory().create(Main.instance); // The factory creates the TimeContent object
 
-                // Store it in the player's personal map, using the class name as a simple unique key.
-                this.playerTimeContents.put(content.getClass().getName(), content);
-                logger.debug("Created player-specific TimeContent: {} for {}", content.getClass().getSimpleName(), getUsername());
+                // Store it in the player's personal map, using the unique identifier as the key.
+                // This ensures that even if two factories create objects of the same class,
+                // they will have different keys if their registration identifiers are different.
+                this.playerTimeContents.put(entry.identifier(), content);
+                logger.debug("Created player-specific TimeContent: {} ({}) for {}",
+                        content.getClass().getSimpleName(), entry.identifier(), getUsername());
             } catch (Exception e) {
                 logger.error("Failed to create TimeContent from factory for {}: {}", getUsername(), e.getMessage(), e);
             }
@@ -209,7 +215,8 @@ public class ServerPlayer extends Player {
                 teleport(intendedSpawnPoint);
                 setGameMode(ServerState.PLAYING.getGameMode());
                 // Respawn point already set in applyState, ensures consistency after death
-                sendMessage(Component.text("Welcome back, " + getUsername() + "! You are on team " + team.name() + "."));
+                final Title title = Title.title(MiniMessage.miniMessage().deserialize("<" + getServerTeam().color() + ">Welcome back, " + getServerProfile().getTeamUsername() + "</" + getServerTeam().color() + ">"), Component.text(""));
+                showTitle(title);
                 break;
 
             case BANNED:
@@ -345,15 +352,19 @@ public class ServerPlayer extends Player {
             }
         }
 
-        for (TimeContent content : playerTimeContents.values()) {
-            if (content.canSpawn(this) && !receivedTimeContentViews.contains(content)) {
+        // Iterate over the entries to get both the unique key and the content object
+        for (Map.Entry<String, TimeContent> entry : playerTimeContents.entrySet()) {
+            String uniqueContentKey = entry.getKey(); // This is your unique identifier (e.g., "daily_challenge_sign_1")
+            TimeContent content = entry.getValue();
+
+            if (content.canSpawn(this) && !receivedTimeContentViews.contains(uniqueContentKey)) {
                 Collection<SendablePacket> packets = content.getSpawnPackets(this);
 
                 if (packets != null && !packets.isEmpty()) {
                     Main.logger.debug("Sending packets for Player-specific TimeContent: {} - {} packets to {}",
-                            content.getClass().getSimpleName(), packets.size(), getUsername());
+                            uniqueContentKey, packets.size(), getUsername());
                     sendPackets(packets);
-                    addReceivedTimeContentView(content);
+                    addReceivedTimeContentView(uniqueContentKey); // Store the unique key
                 }
             }
         }
@@ -379,29 +390,8 @@ public class ServerPlayer extends Player {
         return playerTimeContents;
     }
 
-    public void addReceivedTimeContentView(TimeContent content) {
-        receivedTimeContentViews.add(content);
-    }
-
-    /**
-     * Clears all recorded views for TimeContent and sends despawn packets for any visible content.
-     * This is important when a player's state changes significantly (e.g., respawn, team change).
-     */
-    public void clearReceivedTimeContentViews() {
-        // First, collect all despawn packets from currently managed content
-        Collection<SendablePacket> despawnPackets = playerTimeContents.values().stream()
-                .flatMap(c -> c.getDespawnPackets(this).stream())
-                .collect(Collectors.toList());
-
-        // Send despawn packets to the player if there are any
-        if (!despawnPackets.isEmpty()) {
-            sendPackets(despawnPackets);
-            logger.debug("Sent {} despawn packets for {}'s TimeContent.", despawnPackets.size(), getUsername());
-        }
-
-        // Then, clear the set of views
-        receivedTimeContentViews.clear();
-        logger.debug("Cleared receivedTimeContentViews for {}.", getUsername());
+    public void addReceivedTimeContentView(String uniqueContentKey) { // Accept the unique key
+        receivedTimeContentViews.add(uniqueContentKey);
     }
 
     @Override
@@ -442,18 +432,30 @@ public class ServerPlayer extends Player {
         return new PlayerInfoUpdatePacket(EnumSet.of(PlayerInfoUpdatePacket.Action.ADD_PLAYER, PlayerInfoUpdatePacket.Action.UPDATE_LISTED),
                 List.of(entry));
     }
+    public void clearReceivedTimeContentViews() {
+        // First, collect all despawn packets from currently managed content
+        Collection<SendablePacket> despawnPackets = playerTimeContents.values().stream()
+                .flatMap(c -> c.getDespawnPackets(this).stream())
+                .collect(Collectors.toList());
 
+        // Send despawn packets to the player if there are any
+        if (!despawnPackets.isEmpty()) {
+            sendPackets(despawnPackets);
+            logger.debug("Sent {} despawn packets for {}'s TimeContent.", despawnPackets.size(), getUsername());
+        }
+
+        // Then, clear the set of views
+        receivedTimeContentViews.clear();
+        logger.debug("Cleared receivedTimeContentViews for {}.", getUsername());
+    }
 
     /**
-     * Gets a specific TimeContent instance for this player by its unique identifier (class name).
-     * @param contentClass The class of the TimeContent to retrieve.
+     * Gets a specific TimeContent instance for this player by its unique identifier (the key you registered it with).
+     * @param identifier The unique string identifier used during registration in TimeContentManager.
      * @param <T> The type of TimeContent.
      * @return The player's specific instance of the TimeContent, or null if not found.
      */
-    public <T extends TimeContent> T getPlayerTimeContent(Class<T> contentClass) {
-        // Using Class.getName() as the key, ensure type safety with cast.
-        // It's generally safer to use Class<T> as a key in the map itself,
-        // but if you're stuck with String keys, this works.
-        return (T) playerTimeContents.get(contentClass.getName());
+    public <T extends TimeContent> T getPlayerTimeContent(String identifier) {
+        return (T) playerTimeContents.get(identifier);
     }
 }

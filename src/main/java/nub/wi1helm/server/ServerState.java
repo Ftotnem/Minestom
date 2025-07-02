@@ -39,7 +39,7 @@ public enum ServerState {
 
                     return MiniMessage.miniMessage().deserialize(
                             "<" + teamColor + ">" + teamUsername + "</" + teamColor + "> | " +
-                                    "<gray>Time: " + formatSecondsWithDots(currentPlaytimeSeconds) + "</gray> | " +
+                                    "<gray>" + formatSecondsWithDots(currentPlaytimeSeconds) +  " s</gray> | " +
                                     "<dark_gray>+" + String.format("%.1f", deltaPlaytimeSeconds) + " s/s</dark_gray>"
                     );
                 }

@@ -24,9 +24,7 @@ dependencies {
 
     implementation("nub.wi1helm.template:Template:0.2.4.2")
 
-    // Logging
-    implementation("org.slf4j:slf4j-api:2.0.15")
-    implementation("ch.qos.logback:logback-classic:1.5.7")
+
     // Redis
     implementation("redis.clients:jedis:5.0.0")
 

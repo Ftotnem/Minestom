@@ -27,7 +27,7 @@ public class TeamBlock extends TimeBlock {
             case PURPLE_AXOLOTLS -> blockToShow = Block.AMETHYST_BLOCK;
             default -> blockToShow = Block.AIR;
         }
-        BlockVec absPos = new BlockVec(TimeContentUtil.transformToAbsolute(getLocalPos(), player.getServerTeam()));
+        BlockVec absPos = new BlockVec(TimeContentUtil.transformToAbsolute(this, player.getServerTeam()));
         return Set.of(
                 new BlockChangePacket(absPos, blockToShow),
                 new SoundEffectPacket(SoundEvent.BLOCK_NOTE_BLOCK_DIDGERIDOO, Sound.Source.MASTER, absPos, 1f, 1f, 0)
@@ -36,7 +36,7 @@ public class TeamBlock extends TimeBlock {
 
     @Override
     public Collection<SendablePacket> getDespawnPackets(ServerPlayer player) {
-        BlockVec absPos = new BlockVec(TimeContentUtil.transformToAbsolute(getLocalPos(), player.getServerTeam()));
+        BlockVec absPos = new BlockVec(TimeContentUtil.transformToAbsolute(this, player.getServerTeam()));
         return Set.of(new BlockChangePacket(absPos, Block.AIR));
     }
 }

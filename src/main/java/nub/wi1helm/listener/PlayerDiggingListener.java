@@ -115,7 +115,7 @@ public final class PlayerDiggingListener {
         for (TimeContent content : player.getPlayerTimeContents().values()) {
             if (content instanceof TimeBlock timeBlock) {
                 // Transform the TimeBlock's local position to its absolute position based on the player's team.
-                Point absoluteTimeBlockPos = TimeContentUtil.transformToAbsolute(timeBlock.getLocalPos(), player.getServerTeam());
+                Point absoluteTimeBlockPos = TimeContentUtil.transformToAbsolute(timeBlock, player.getServerTeam());
 
                 // A block is considered a "ghost" if:
                 // 1. Its absolute position matches the block the player is interacting with.
@@ -146,7 +146,7 @@ public final class PlayerDiggingListener {
             if (content instanceof TimeBlock timeBlock) {
                 // Only consider content the player is eligible to see.
                 if (content.canSpawn(player)) {
-                    Point absoluteTimeBlockPos = TimeContentUtil.transformToAbsolute(timeBlock.getLocalPos(), player.getServerTeam());
+                    Point absoluteTimeBlockPos = TimeContentUtil.transformToAbsolute(timeBlock, player.getServerTeam());
                     if (absoluteTimeBlockPos.samePoint(blockPosition)) {
                         // Request spawn packets from the TimeBlock. A TimeBlock's spawn packets
                         // should include a BlockChangePacket if it's meant to be displayed.

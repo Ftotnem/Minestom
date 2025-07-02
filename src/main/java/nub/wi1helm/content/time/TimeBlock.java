@@ -8,6 +8,7 @@ import nub.wi1helm.server.ServerPlayer;
 
 import java.util.Collection;
 import java.util.Set;
+import java.util.UUID;
 
 public class TimeBlock implements TimeContent {
     private final Block block;
@@ -22,16 +23,18 @@ public class TimeBlock implements TimeContent {
 
     @Override
     public Collection<SendablePacket> getSpawnPackets(ServerPlayer player) {
-        BlockVec abs = new BlockVec(TimeContentUtil.transformToAbsolute(localPos, player.getServerTeam()));
+        BlockVec abs = new BlockVec(TimeContentUtil.transformToAbsolute(this, player.getServerTeam()));
         return Set.of(new BlockChangePacket(abs, block));
     }
 
     @Override
     public Collection<SendablePacket> getDespawnPackets(ServerPlayer player) {
-        BlockVec abs = new BlockVec(TimeContentUtil.transformToAbsolute(localPos, player.getServerTeam()));
+        BlockVec abs = new BlockVec(TimeContentUtil.transformToAbsolute(this, player.getServerTeam()));
         return Set.of(new BlockChangePacket(abs, Block.AIR));
     }
 
     @Override public double getTime() { return time; }
     @Override public BlockVec getLocalPos() { return localPos; }
+
 }
+

@@ -11,9 +11,9 @@ public class Global{
 
     EventNode<Event> node = MinecraftServer.getGlobalEventHandler();
 
-    InstanceListener instanceListener = InstanceListener.getInstance(node);
-    PlayerListener playerListener = PlayerListener.getInstance(node);
-
+    InstanceHandler instanceListener = InstanceHandler.getInstance(node);
+    PlayerHandler playerHandler = PlayerHandler.getInstance(node);
+    ChatHandler chatHandler = ChatHandler.getInstance(node);
     public Global() {
 
         loadPlayer();
