@@ -19,7 +19,7 @@ import static nub.wi1helm.Main.logger;
 public class PlayerService {
     private static volatile PlayerService instance;
     private static final Object lock = new Object();
-    private static final String BASE_URL = "http://localhost:8081";
+    private static final String BASE_URL = "http://player-service:8081";
 
     private final HttpClient httpClient;
     private final Gson gson;

@@ -19,7 +19,7 @@ public class GameService {
     private static final Object lock = new Object();
 
     // Base URL for your Go Game Service
-    private static final String GAME_SERVICE_BASE_URL = "http://localhost:8082";
+    private static final String GAME_SERVICE_BASE_URL = "http://game-service:8082";
 
     private final HttpClient httpClient;
     private final Gson gson;
