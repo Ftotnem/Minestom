@@ -50,6 +50,11 @@ public class Registrar {
     // Delay before retrying registration if it fails or is not found
     private static final long REGISTRATION_RETRY_DELAY_SECONDS = 5;
 
+    // --- NEW: Redis Connection Retry Configuration ---
+    private static final int REDIS_MAX_RETRIES = 10;
+    private static final long REDIS_RETRY_DELAY_SECONDS = 5;
+
+
     private final String minestomServiceId;
     private final String minestomPodIp;
     private final int minestomPort;
@@ -178,40 +183,57 @@ public class Registrar {
      *
      * @param config The RegistrarConfig containing all necessary settings.
      * @return A fully configured and initialized Registrar instance.
-     * @throws IllegalStateException if Redis connection fails.
+     * @throws IllegalStateException if Redis connection fails after retries.
      */
     public static Registrar createAndConfigure(RegistrarConfig config) {
-        JedisCluster jedisCluster;
-        try {
-            // Configure JedisPoolConfig for connection pooling
-            // --- MODIFIED DECLARATION HERE ---
-            GenericObjectPoolConfig<Connection> poolConfig = new GenericObjectPoolConfig<>();
-            poolConfig.setMaxTotal(128); // Max active connections
-            poolConfig.setMaxIdle(128); // Max idle connections
-            poolConfig.setMinIdle(16);  // Min idle connections
-            poolConfig.setTestOnBorrow(true); // Test connections when borrowed
-            poolConfig.setTestOnReturn(true); // Test connections when returned
-            poolConfig.setTestWhileIdle(true); // Test connections while idle
-            poolConfig.setMinEvictableIdleTimeMillis(Duration.ofSeconds(60).toMillis());
-            poolConfig.setTimeBetweenEvictionRunsMillis(Duration.ofSeconds(30).toMillis());
-            poolConfig.setNumTestsPerEvictionRun(3);
-            poolConfig.setBlockWhenExhausted(true); // Block when pool is exhausted
+        JedisCluster jedisCluster = null;
+        int retryCount = 0;
+        // --- ADDED RETRY LOOP FOR REDIS CONNECTION ---
+        while (jedisCluster == null && retryCount < REDIS_MAX_RETRIES) {
+            try {
+                // Configure JedisPoolConfig for connection pooling
+                GenericObjectPoolConfig<Connection> poolConfig = new GenericObjectPoolConfig<>();
+                poolConfig.setMaxTotal(128); // Max active connections
+                poolConfig.setMaxIdle(128); // Max idle connections
+                poolConfig.setMinIdle(16);  // Min idle connections
+                poolConfig.setTestOnBorrow(true); // Test connections when borrowed
+                poolConfig.setTestOnReturn(true); // Test connections when returned
+                poolConfig.setTestWhileIdle(true); // Test connections while idle
+                poolConfig.setMinEvictableIdleTimeMillis(Duration.ofSeconds(60).toMillis());
+                poolConfig.setTimeBetweenEvictionRunsMillis(Duration.ofSeconds(30).toMillis());
+                poolConfig.setNumTestsPerEvictionRun(3);
+                poolConfig.setBlockWhenExhausted(true); // Block when pool is exhausted
 
-            // Pass the password to JedisCluster constructor
-            jedisCluster = new JedisCluster(
-                    config.getRedisClusterNodes(),
-                    2000, // connectionTimeoutMillis
-                    2000, // soTimeoutMillis
-                    5,    // maxAttempts
-                    config.getRedisPassword(), // Pass the password here
-                    poolConfig
-            );
+                // Pass the password to JedisCluster constructor
+                jedisCluster = new JedisCluster(
+                        config.getRedisClusterNodes(),
+                        2000, // connectionTimeoutMillis
+                        2000, // soTimeoutMillis
+                        5,    // maxAttempts
+                        config.getRedisPassword(), // Pass the password here
+                        poolConfig
+                );
 
-            // Simple test to ensure connection
-            jedisCluster.hgetAll("test_connection");
-            logger.info("Successfully connected to Redis cluster: {}", config.getRedisClusterNodes());
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to connect to Redis cluster using provided nodes: " + config.getRedisClusterNodes(), e);
+                // Simple test to ensure connection
+                jedisCluster.hgetAll("test_connection");
+                logger.info("Successfully connected to Redis cluster: {}", config.getRedisClusterNodes());
+            } catch (Exception e) {
+                retryCount++;
+                logger.error("Failed to connect to Redis cluster (attempt {}/{}) using provided nodes: {}. Retrying in {} seconds. Error: {}",
+                        retryCount, REDIS_MAX_RETRIES, config.getRedisClusterNodes(), REDIS_RETRY_DELAY_SECONDS, e.getMessage());
+                if (retryCount < REDIS_MAX_RETRIES) {
+                    try {
+                        TimeUnit.SECONDS.sleep(REDIS_RETRY_DELAY_SECONDS);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("Redis connection retry interrupted.", ie);
+                    }
+                }
+            }
+        }
+
+        if (jedisCluster == null) {
+            throw new IllegalStateException("Failed to connect to Redis cluster after " + REDIS_MAX_RETRIES + " retries.");
         }
 
         return new Registrar(config, jedisCluster);
@@ -430,6 +452,8 @@ public class Registrar {
         try {
             proxyEntries = jedisCluster.hgetAll(hashKey);
         } catch (Exception e) {
+            // This catch block already provides a form of resilience for Redis being temporarily down
+            // as it logs the error and the scheduler will re-attempt on the next interval.
             logger.error("Failed to retrieve proxy entries from Redis: {}", e.getMessage(), e);
             return;
         }
