@@ -5,7 +5,7 @@ FROM openjdk:23-jdk-slim
 WORKDIR /app
 
 # Copy the server JAR into the container
-COPY ./docker/Minestom-0.1.jar /app/server.jar
+COPY ./docker/Minestom-0.2.jar /app/server.jar
 
 # Copy the resources folder into the container (relative to the root directory)
 COPY ./resources /app/resources

@@ -51,12 +51,6 @@ public class ChatHandler {
         return instance;
     }
 
-    /**
-     * Gets the singleton instance of ChatHandler.
-     * Should only be called after getInstance(EventNode<Event> global) has been called.
-     *
-     * @return The singleton instance of ChatHandler, or null if not yet initialized.
-     */
     @Nullable
     public static ChatHandler getInstance() {
         return instance;
