@@ -6,6 +6,7 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.minestom.server.entity.Player;
 import net.minestom.server.inventory.InventoryType;
 import net.minestom.server.item.Material;
+import nub.wi1helm.inventory.item.TimeSplashPotionItem;
 import nub.wi1helm.server.ServerPlayer; // Assuming ServerPlayer is your custom player class
 import nub.wi1helm.template.inventory.TemplateInventory;
 import nub.wi1helm.template.inventory.TemplateInventoryEvent;
@@ -18,13 +19,13 @@ import java.util.List;
 public class TimeExchangeBankMenu extends TemplateInventory {
 
     public TimeExchangeBankMenu() {
-        super(MiniMessage.miniMessage().deserialize("<dark_purple>Time Exchange Bank</dark_purple>"), InventoryType.CHEST_3_ROW);
+        super(MiniMessage.miniMessage().deserialize("<dark_purple>Time Exchange Bank</dark_purple>"), InventoryType.CHEST_4_ROW);
     }
 
     @Override
     protected void initialize() {
         // Close button in the bottom center
-        setItem(22, new CloseButton());
+        setItem(31, new CloseButton());
         // Fill empty slots with a background item
         fillInventory(new BackgroundItem());
     }
@@ -49,7 +50,7 @@ public class TimeExchangeBankMenu extends TemplateInventory {
                 final ServerPlayer p1 = (ServerPlayer) player;
                 // Assuming ServerPlayer has methods to get playtime and delta time
                 // You'll need to replace these with your actual methods
-                double currentPlaytime = p1.getCurrentPlaytime(); // Placeholder method
+                double currentPlaytime = p1.getCurrentPlaytime() / 20; // Placeholder method
                 double currentDeltaTime = p1.getDeltaPlaytime(); // Placeholder method
 
                 setLore(List.of(
@@ -70,5 +71,11 @@ public class TimeExchangeBankMenu extends TemplateInventory {
                 // No action on dropping
             }
         });
+
+
+        setItem(10, new TimeSplashPotionItem(10));
+        setItem(12, new TimeSplashPotionItem(100));
+        setItem(14, new TimeSplashPotionItem(1000));
+        setItem(16, new TimeSplashPotionItem(10000));
     }
 }

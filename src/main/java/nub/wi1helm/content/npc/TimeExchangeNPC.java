@@ -1,25 +1,14 @@
 package nub.wi1helm.content.npc;
 
-import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.format.NamedTextColor;
 import net.minestom.server.MinecraftServer;
-import net.minestom.server.component.DataComponents;
 import net.minestom.server.coordinate.Point;
 import net.minestom.server.coordinate.Pos;
 import net.minestom.server.entity.Player;
 import net.minestom.server.entity.PlayerHand;
 import net.minestom.server.event.player.PlayerEntityInteractEvent;
 import net.minestom.server.instance.Instance;
-import net.minestom.server.item.ItemAnimation;
-import net.minestom.server.item.ItemStack;
-import net.minestom.server.item.Material;
-import net.minestom.server.item.component.Consumable;
-import net.minestom.server.item.component.Food;
-import net.minestom.server.item.component.UseCooldown;
 import net.minestom.server.network.packet.server.SendablePacket;
-import net.minestom.server.recipe.display.SlotDisplay;
-import net.minestom.server.sound.SoundEvent;
 import nub.wi1helm.Main;
 import nub.wi1helm.content.time.TimeContent;
 import nub.wi1helm.content.time.TimeContentUtil;
@@ -30,7 +19,7 @@ import nub.wi1helm.template.npc.Interactable;
 import nub.wi1helm.template.npc.Nameable;
 import nub.wi1helm.template.npc.actions.AbstractAction;
 import nub.wi1helm.template.npc.actions.ActionList;
-import nub.wi1helm.template.npc.actions.MenuAction;
+import nub.wi1helm.template.npc.actions.DynamicMenuAction;
 import nub.wi1helm.template.npc.player.SkinLayer;
 import nub.wi1helm.template.npc.player.TemplatePlayerNPC;
 import org.jetbrains.annotations.NotNull;
@@ -89,7 +78,7 @@ public class TimeExchangeNPC extends TemplatePlayerNPC implements TimeContent, N
 
         // Define the action to open the shop using MenuAction.
         setActionList(new ActionList(
-                new MenuAction(0, 0, true, new TimeExchangeBankMenu().constructInventory(player)) { // Action 0 directly opens the menu
+                new DynamicMenuAction(0, 0, true, new TimeExchangeBankMenu()) { // Action 0 directly opens the menu
                     @Override
                     public AbstractAction determineNextAction(Player player, ActionList actionList) {
                         // After the menu is closed, you might want to return to this same action
@@ -157,12 +146,5 @@ public class TimeExchangeNPC extends TemplatePlayerNPC implements TimeContent, N
                 onInteract(event.getPlayer()); // Trigger the interaction logic
             }
         });
-
-        ItemStack item = ItemStack.builder(Material.DIAMOND)
-                .set(DataComponents.USE_COOLDOWN, new UseCooldown(3f, "Hello"))
-                .set(DataComponents.FOOD, new Food(0,0, true))
-                .set(DataComponents.CONSUMABLE, new Consumable(Consumable.DEFAULT_CONSUME_SECONDS, ItemAnimation.EAT, SoundEvent.ITEM_GOAT_HORN_SOUND_0, false, List.of()))
-                .build();
-
     }
 }

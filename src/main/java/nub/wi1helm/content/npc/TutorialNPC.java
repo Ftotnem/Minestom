@@ -143,7 +143,7 @@ public class TutorialNPC extends TemplatePlayerNPC implements TimeContent, Namea
                         )) {
                     @Override
                     public AbstractAction determineNextAction(Player player, ActionList actionList) {
-                        return actionList.getAction(5); // Next action in sequence
+                        return actionList.getAction(0); // Next action in sequence
                     }
                 },
 

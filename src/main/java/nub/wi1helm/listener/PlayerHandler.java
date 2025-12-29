@@ -1,6 +1,8 @@
 package nub.wi1helm.listener;
 
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.minestom.server.coordinate.Pos;
+import net.minestom.server.coordinate.Vec;
 import net.minestom.server.event.Event;
 import net.minestom.server.event.EventFilter;
 import net.minestom.server.event.EventNode;
@@ -24,6 +26,7 @@ public class PlayerHandler {
         join();
         leave();
         cancel();
+        voidPushBack();
         voidTeleport();
     }
 
@@ -36,6 +39,26 @@ public class PlayerHandler {
     @Nullable
     public static PlayerHandler getInstance() {
         return instance;
+    }
+
+    private void voidPushBack() {
+        node.addListener(PlayerMoveEvent.class, event -> {
+
+            final ServerPlayer player = (ServerPlayer) event.getPlayer();
+
+            if (player.getPosition().y() > -62) return;
+
+            ServerTeam team = player.getServerTeam();
+
+            Pos target = team.getPos();
+            Pos position = player.getPosition();
+
+            Vec vector = target.asVec().sub(position);
+
+            player.setVelocity(vector.withY(30));
+
+
+        });
     }
 
     private void voidTeleport() {
